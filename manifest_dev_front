@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<udm.DeploymentPackage version="!dar_version!" application="APPLICATION_NAME">
+  <application />
+  <orchestrator />
+  <deployables>
+    <nxsGeneric.Zip name="/application-name.zip">
+      <tags>TAG_APPL</tags>
+      <scanPlaceholders>true</scanPlaceholders>
+      <preScannedPlaceholders>false</preScannedPlaceholders>
+       <placeholders>
+		<value>ENV_APPLI_JSON</value>
+	</placeholders>
+      <textFileNamesRegex>.+\.(js | json | config | ini | properties | props | txt | asp | aspx | htm | html | jsf | jsp | xht | xhtml | sql | xml | xsd | xsl | xslt | yml)</textFileNamesRegex>
+      <checksum></checksum>
+      <fileEncodings>
+        <entry key=".+\.properties">ISO-8859-1</entry>
+      </fileEncodings>
+      <fileUri>https://xxxx/application-name_!dar_version!.zip</fileUri>
+      <credentials ref="Configuration/sss/sss/ARTIFACTORY" />
+	  <preCommand/>
+      <relativeTargetDirectory/>
+      <folderPermissionsMap />
+      <expressionPermissionsMap />
+    </nxsGeneric.Zip>
+  </deployables>
+  <applicationDependencies />
+  <dependencyResolution>LATEST</dependencyResolution>
+  <undeployDependencies>false</undeployDependencies>
+  <templates />
+  <boundTemplates />
+</udm.DeploymentPackage>
