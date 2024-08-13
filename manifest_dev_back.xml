@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<udm.DeploymentPackage version="!dar_version!" application="SERVICES_INSTALL_DEV">
+  <application />
+  <orchestrator />
+  <deployables>
+    <nxsGeneric.File name="/Service-1.jar">
+      <tags />
+      <scanPlaceholders>true</scanPlaceholders>
+      <preScannedPlaceholders>true</preScannedPlaceholders>
+      <placeholders />
+      <textFileNamesRegex>.+\.(cfg | conf | config | ini | properties | props | txt | asp | aspx | htm | html | jsf | jsp | xht | xhtml | sql | xml | xsd | xsl | xslt | yml)</textFileNamesRegex>
+      <checksum>ddd</checksum>
+      <fileEncodings>
+        <entry key=".+\.properties">ISO-8859-1</entry>
+      </fileEncodings>
+      <fileUri>https://ddd/Service-1/!dar_version!/Service-1-!dar_version!.jar</fileUri>
+      <credentials ref="ssss/ARTIFACTORY" />
+      <preCommand>rm -f /appli/sss/services/Service-1/Service-1*.jar</preCommand>
+      <relativeTargetDirectory>appli/sss/services/Service-1/</relativeTargetDirectory>
+      <createFolderOnContainer>true</createFolderOnContainer>
+      <tragetFileName>Service-1-!dar_version!.jar</tragetFileName>
+    </nxsGeneric.File>
+    <nxsGeneric.File name="/Service-2.jar">
+      <tags />
+      <scanPlaceholders>true</scanPlaceholders>
+      <preScannedPlaceholders>true</preScannedPlaceholders>
+      <placeholders />
+      <textFileNamesRegex>.+\.(cfg | conf | config | ini | properties | props | txt | asp | aspx | htm | html | jsf | jsp | xht | xhtml | sql | xml | xsd | xsl | xslt | yml)</textFileNamesRegex>
+      <checksum>vdddd</checksum>
+      <fileEncodings>
+        <entry key=".+\.properties">ISO-8859-1</entry>
+      </fileEncodings>
+      <fileUri>https://ddd/Service-2/!dar_version!/Service-2-!dar_version!.jar</fileUri>
+      <credentials ref="ssss/ARTIFACTORY" />
+      <preCommand>rm -f /appli/sss/services/Service-2/Service-2*.jar</preCommand>
+      <relativeTargetDirectory>/appli/sss/services/Service-2</relativeTargetDirectory>
+      <createFolderOnContainer>true</createFolderOnContainer>
+      <tragetFileName>Service-2-!dar_version!.jar</tragetFileName>
+    </nxsGeneric.File
+  </deployables>
+  <applicationDependencies />
+  <dependencyResolution>LATEST</dependencyResolution>
+  <undeployDependencies>false</undeployDependencies>
+  <templates />
+  <boundTemplates />
+</udm.DeploymentPackage>
