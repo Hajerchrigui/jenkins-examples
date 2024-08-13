@@ -1,0 +1,173 @@
+def String getVersion() {
+    def packageJSON = readJSON file: 'xxx-xxx/package.json'
+    return packageJSON.version
+}
+pipeline {
+    agent {label 'base'}
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        disableConcurrentBuilds()
+        skipStagesAfterUnstable()
+    }
+	environment {
+        EMAIL_TO = 'email'
+    }	
+	
+	
+	/*triggers {
+        GenericTrigger(
+            genericVariables: [
+            [key: 'NAME_PR', value: '$.pullRequest.title'],
+            [key: 'PR_ID', value: '$.pullRequest.id'],
+            [key: 'PR_TOREF_BRANCH', value: '$.pullRequest.toRef.displayId'],
+            [key: 'PR_FROMREF_BRANCH', value: '$.pullRequest.fromRef.displayId']          
+            ],
+            causeString: 'Generic Cause',
+            token: 'xxx@xxx',
+            tokenCredentialId: '',
+            printContributedVariables: true,
+            printPostContent: true,
+            silentResponse: false,
+            regexpFilterText: '$PR_TOREF_BRANCH ',
+            regexpFilterExpression: 'develop'
+        )
+    }*/
+	post {
+        failure {
+            emailext body: 'Check console output at $BUILD_URL to view the results. \n\n ${CHANGES} \n\n -------------------------------------------------- \n${BUILD_LOG, maxLines=100, escapeHtml=false}', 
+                    to: "${EMAIL_TO}", 
+                    subject: 'Build failed in Jenkins: $PROJECT_NAME - #$BUILD_NUMBER'
+			}
+		}
+    stages {
+       
+        stage('CleanWorkspace') {
+            steps {
+                cleanWs()
+                }
+        }
+	
+		stage ('Update version'){
+            agent {
+                label 'ria-node16.16.0-npm8.11.0'
+            }
+            steps {
+                echo 'Updating version...'  
+                script {
+                    if(env.GIT_BRANCH == 'origin/develop'){
+                        def data = readJSON file: 'portail-mjpm/package.json'
+                        data.version = data.version.split("-")[0] + '-SNAPSHOT+' + Calendar.getInstance().getTime().format('YYYYMMddhhmm',TimeZone.getTimeZone('UTC'))
+                        writeJSON file: 'portail-mjpm/package.json', json: data , overwrite: true , pretty: 4
+                    }
+                    else if(env.GIT_BRANCH == 'origin/hotfix'){
+                        sh ' npm version patch' 
+                    }
+                    else {
+                        def data = readJSON file: 'portail-mjpm/package.json'
+                        data.version = data.version.split("-")[0]
+                        writeJSON file: 'portail-mjpm/package.json', json: data , overwrite: true , pretty: 4
+                    }
+
+                    GIT_DIFF_STATUS = sh (
+                        script: 'git diff --quiet && git diff --cached --quiet',
+                        returnStatus: true
+                    )
+                    if (GIT_DIFF_STATUS == 1) {
+                        echo 'Commiting...'
+                        withCredentials([gitUsernamePassword(credentialsId: 'BITBUCKET', gitToolName: 'Default')]) {
+                            version = getVersion()
+                            sh 'git config --global user.email "user-email-jenkins"'
+                            sh 'git config --global user.name "name"'
+                            sh 'git add xxx-xxx/package.json'
+                            sh 'git commit -m "Version ${version}"'
+                            sh 'git push --set-upstream origin ${GIT_BRANCH##origin/}'
+                        }
+                    }
+                }
+           }   
+        }
+           stage('Install module') {
+			agent {
+					label 'node16.14.npm8.5.1'
+				}
+			steps {
+				sh ' npm config list --prefix portail-mjpm '
+				sh 'npm --version'
+				sh 'which npm '
+				sh 'cd ./xxx-xxx ; npm install --force '
+            }
+        }
+       
+        stage('BUILD') {
+			agent {
+				label 'node16.14.npm8.5.1'
+				}
+			steps {
+				sh 'npm run --prefix portail-mjpm start:build '
+				}
+        }
+		
+        stage('Sonar') {
+			agent {
+                label 'ria-node16.16.0-npm8.11.0'
+            }
+			steps{
+			 sh 'printenv'
+		     sh 'export PATH=$SONAR_NODEJS_HOME:$PATH && sonar-scanner -Dsonar.projectVersion=2020_04_02 -Dsonar.sources=. -Dsonar.projectKey=xxx -Dsonar.host.url=https://sonarqube.url.fr/ -Dsonar.projectName=xxx_BUILD_xxx'
+            }
+        }
+		
+        stage('ZIP BUILD') {
+			agent {
+				label 'node16.14.npm8.5.1'
+			}
+			steps {
+				sh 'cd portail-mjpm;npm run zip'
+				sh 'ls -lrt'
+				}
+       }
+    
+	    stage('Artifactory UPLOAD') {
+        		
+        			steps {
+        				rtServer(
+        					id: "ARTIFACTORY_DCE"
+        				)
+                        sh 'cd xxx-xxx'
+        				rtUpload (
+					    serverId: 'ARTIFACTORY_DCE',
+						spec: '''{
+						"files": [
+							{
+						"pattern": "*.zip",
+						"target": "xxx-generic-xxx/FRONT/PORTAIL/"
+						}
+						    
+							]
+								}''',)
+        			}
+        		}
+      
+         stage ('xld: package') {
+			environment {
+					VERSION = getVersion()
+			}
+            steps {
+				script {
+						echo 'Packaging DAR...'
+						echo "*********** ${env.GIT_BRANCH} ********"
+                        sh "sed -i 's#!dar_version!#${VERSION}#g' xxx-xxx/manifest_DEV.xml"
+                        xldCreatePackage artifactsPath: '.', manifestPath: 'xxx-xxx/manifest_DEV.xml', darPath: 'temp.dar'
+				}		
+            }
+        }
+
+        stage('xld: publish') {
+            steps {
+                echo 'Publish DAR to XLDeploy'
+                xldPublishPackage darPath: 'temp.dar', serverCredentials: 'xld-bis39'
+            }
+        }
+    }
+            
+}
