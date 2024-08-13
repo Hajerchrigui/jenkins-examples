@@ -119,8 +119,8 @@ stage ('Upgrade snapshot version')
 						withCredentials([gitUsernamePassword(credentialsId: 'BITBUCKET', gitToolName: 'Default')]) {
 							VERSION = getVersion()
 							echo "VERSION ${VERSION}"
-							sh 'git config --global user.email "jenkins@bpce-si.fr"'
-							sh 'git config --global user.name "Jenkins"'
+							sh 'git config --global user.email "jenkins@email"'
+							sh 'git config --global user.name "name"'
 							
 							//sh "git tag -d 3.1.0"
 							
@@ -183,7 +183,7 @@ stage('Exec Maven')
 				steps 
 				{
 					echo 'Publish DAR to XLDeploy'
-					xldPublishPackage darPath: 'temp.dar', serverCredentials: 'xld-bis39'
+					xldPublishPackage darPath: 'temp.dar', serverCredentials: 'xld-ddd'
 				}
 			}		
         	
