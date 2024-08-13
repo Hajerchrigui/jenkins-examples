@@ -1,0 +1,191 @@
+import java.text.SimpleDateFormat
+
+def String getVersion() {
+	def version = sh script: 'mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f parent/pom.xml', returnStdout: true
+	return version
+}
+
+pipeline {
+        	
+			tools {
+        		maven 'MAVEN_3.6.3'
+        	}
+			
+			
+        	agent {
+        		label 'base'
+        	}
+      environment {
+				EMAIL_TO = 'xxx'
+			}
+    options {
+        		buildDiscarder(logRotator(numToKeepStr: '5'))
+        		disableConcurrentBuilds()
+        		skipStagesAfterUnstable()
+        	}
+    stages {
+        		stage('build') {
+        		      agent {
+        		        label 'maven-jdk17'
+        		      }
+        		      steps {
+        		           sh 'mvn --version'
+        		           sh 'which mvn'
+        		        sh 'mvn -f parent/pom.xml clean package'
+        		      }
+
+        		 }
+        	
+        		stage('Artifactory configuration') {
+        			agent {
+        				label 'maven-jdk17'
+        			}
+        			steps {
+        				rtServer(
+        					id: "ARTIFACTORY_DCE"
+        				)
+
+        				rtMavenDeployer(
+        					id: "MAVEN_DEPLOYER",
+        					serverId: "ARTIFACTORY_DCE",
+        					releaseRepo: 'xxx-generic-xxx',
+        					snapshotRepo: 'xxx-generic-xxx/snapshots'
+        				)
+
+        				rtMavenResolver(
+        					id: "MAVEN_RESOLVER",
+        					serverId: "ARTIFACTORY_DCE",
+        					releaseRepo: "ccc",
+        					snapshotRepo: "ccc"
+        				)
+        			}
+        		}
+    stage('SonarQube analysis') {
+        	    agent {
+        		        label 'maven-jdk17'
+        		      }
+            steps {
+                withSonarQubeEnv('SONAR_DCE') {
+                    sh "export MAVEN_OPTS='-Xmx512m -XX:MaxPermSize=128m'"
+                    sh "mvn -f Auth-Center/pom.xml sonar:sonar  -Dsonar.projectKey=xxx:Service_build_microservice_release"
+                }
+            }
+        }
+// Upgrade automatiquement la vesion de snapshot
+stage ('Upgrade snapshot version')
+				{
+					agent {
+        				label 'maven-jdk17'
+        			}
+					steps 
+					{
+						echo 'Upgrading...'  
+						script	{
+							def now = new Date()
+							def timestamp = now.format("yyyyMMddHHmmss",TimeZone.getTimeZone('UTC'))
+							def pom = readMavenPom file: 'parent/pom.xml'
+							def currentVersion = pom.version
+							if (env.GIT_BRANCH == 'origin/develop') {
+								echo "Branch is dev"
+								rtMavenRun(
+									tool: "MAVEN_3.6.3",
+									pom: 'parent/pom.xml',
+									goals: "build-helper:parse-version versions:set -DnewVersion=${currentVersion}-SNAPSHOT+${timestamp} versions:commit",
+									deployerId: "MAVEN_DEPLOYER",
+									resolverId: "MAVEN_RESOLVER"
+								)
+							}
+							else if(env.GIT_BRANCH == 'origin/hotfix'){
+								echo "branche hotfix"
+								rtMavenRun(
+									tool: "MAVEN_3.6.3",
+									pom: 'parent/pom.xml',
+									goals: 'build-helper:parse-version versions:set -DnewVersion=${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion} versions:commit',
+									deployerId: "MAVEN_DEPLOYER",
+									resolverId: "MAVEN_RESOLVER"
+								)
+						}
+						else {
+						    echo "branche master"
+							rtMavenRun(
+								tool: "MAVEN_3.6.3",
+								pom: 'parent/pom.xml',
+								goals: 'build-helper:parse-version versions:set -DnewVersion=${project.version} versions:commit',
+								deployerId: "MAVEN_DEPLOYER",
+								resolverId: "MAVEN_RESOLVER"
+							)
+						}
+						
+						withCredentials([gitUsernamePassword(credentialsId: 'BITBUCKET', gitToolName: 'Default')]) {
+							VERSION = getVersion()
+							echo "VERSION ${VERSION}"
+							sh 'git config --global user.email "jenkins@bpce-si.fr"'
+							sh 'git config --global user.name "Jenkins"'
+							
+							//sh "git tag -d 3.1.0"
+							
+							if(env.GIT_BRANCH == 'origin/hotfix' || env.GIT_BRANCH == 'origin/develop' ){
+								sh " git add ."
+								sh 'git commit -m "Version ${version}"'
+							}
+							sh 'git push --set-upstream origin ${GIT_BRANCH##origin/}'
+							sh "git tag ${VERSION}"
+							sh 'git push origin ${VERSION}'
+							}
+						}
+					}   
+			}
+stage('Exec Maven') 
+		    {
+        		agent 
+				{
+        			label 'maven-jdk17'
+        		}
+        		steps {
+        			//install astelinterface to local 
+        			rtMavenRun(
+        			tool: "MAVEN_3.6.3", // Tool name from Jenkins configuration
+        			pom: 'parent/pom.xml',
+        			goals: 'clean package -Dmaven.repo.local=/home/jenkins/.m2',
+        			deployerId: "MAVEN_DEPLOYER",
+        			resolverId: "MAVEN_RESOLVER"
+        			)
+ 
+
+        		}
+        	}	
+            stage('Package') {
+				agent {
+					label 'maven-jdk17'
+				}
+				environment {
+					VERSION = getVersion()
+				}
+				steps 
+				{
+					script {
+						echo 'Packaging DAR...'
+						echo "*********** ${env.GIT_BRANCH} ********"
+						if(env.GIT_BRANCH == 'origin/develop'){
+							echo "origin/develop"
+							sh "sed -i 's#!dar_version!#${VERSION}#g' parent/manifest_DEV.xml"
+							xldCreatePackage artifactsPath: '.', manifestPath: 'parent/manifest_DEV.xml', darPath: 'temp.dar'
+						}
+						else{
+							echo "master"
+							sh "sed -i 's#!dar_version!#${VERSION}#g' parent/manifest.xml"
+							xldCreatePackage artifactsPath: '.', manifestPath: 'parent/manifest.xml', darPath: 'temp.dar'
+						}  
+					}					
+				}
+			}	
+			stage('xld: publish') {
+				steps 
+				{
+					echo 'Publish DAR to XLDeploy'
+					xldPublishPackage darPath: 'temp.dar', serverCredentials: 'xld-bis39'
+				}
+			}		
+        	
+		}
+}
