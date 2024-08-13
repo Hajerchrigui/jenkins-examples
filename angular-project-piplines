@@ -165,7 +165,7 @@ pipeline {
         stage('xld: publish') {
             steps {
                 echo 'Publish DAR to XLDeploy'
-                xldPublishPackage darPath: 'temp.dar', serverCredentials: 'xld-bis39'
+                xldPublishPackage darPath: 'temp.dar', serverCredentials: 'xld-xxx'
             }
         }
     }
